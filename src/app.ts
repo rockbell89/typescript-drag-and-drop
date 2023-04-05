@@ -53,6 +53,43 @@ function validate(validatable: Validatable) {
 }
 
 // class
+enum LIST_TYPE {
+  active = "active",
+  finished = "finished",
+}
+
+class ProjectList {
+  templateEl: HTMLTemplateElement;
+  hostEl: HTMLDivElement;
+  element: HTMLElement;
+
+  constructor(private type: LIST_TYPE) {
+    this.templateEl = document.getElementById(
+      "project-list"
+    )! as HTMLTemplateElement;
+    this.hostEl = document.getElementById("app")! as HTMLDivElement;
+
+    // form element
+    const importedNode = document.importNode(this.templateEl.content, true);
+    this.element = importedNode.firstElementChild as HTMLElement;
+    this.element.id = `${this.type}-projects`;
+
+    // rendering
+    this.attatch();
+    this.renderContent();
+  }
+
+  private renderContent() {
+    const listId = `${this.type}-project-list`;
+    this.element.querySelector("ul")!.id = listId;
+    this.element.querySelector("h2")!.textContent =
+      this.type.toUpperCase() + "PRJECTS";
+  }
+
+  private attatch() {
+    this.hostEl.insertAdjacentElement("beforeend", this.element);
+  }
+}
 class ProjectInput {
   templateEl: HTMLTemplateElement;
   hostEl: HTMLDivElement;
@@ -154,3 +191,5 @@ class ProjectInput {
 }
 
 const project = new ProjectInput();
+const activeProject = new ProjectList(LIST_TYPE.active);
+const finishedProject = new ProjectList(LIST_TYPE.finished);
