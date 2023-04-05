@@ -5,7 +5,7 @@ function AutoBind(
   descriptor: PropertyDescriptor
 ): any {
   const originalMethod = descriptor.value;
-  console.log("originalMethod", descriptor);
+  console.log("originalMethod", originalMethod);
   const adjDescriptor: PropertyDescriptor = {
     configurable: true,
     get() {
@@ -54,10 +54,40 @@ class ProjectInput {
     this.attatch();
   }
 
+  private gatherUserInput(): [string, string, number] | void {
+    const enteredTitle = this.titleInputEl.value;
+    const enteredDesc = this.descInputEl.value;
+    const enteredPeople = this.peopleInputEl.value;
+
+    // 입력 필드 빈값 체크
+    if (
+      enteredTitle.trim().length === 0 ||
+      enteredDesc.trim().length === 0 ||
+      enteredPeople.trim().length === 0
+    ) {
+      alert("입력 필드에 값을 입력헤주세요!");
+      return; // return 값이 없는 경우 void
+    }
+
+    return [enteredTitle, enteredDesc, +enteredPeople];
+  }
+
+  private clearInputs() {
+    this.titleInputEl.value = "";
+    this.descInputEl.value = "";
+    this.peopleInputEl.value = "";
+  }
+
   @AutoBind
   private submitHandler(event: Event) {
     event.preventDefault();
-    console.log("this", this.titleInputEl.value);
+    const userInput = this.gatherUserInput();
+    if (Array.isArray(userInput)) {
+      // 튜블은 배열
+      const [title, desc, people] = userInput;
+      console.log(title, desc, people);
+      this.clearInputs();
+    }
   }
 
   private configure() {
