@@ -16,6 +16,42 @@ function AutoBind(
   return adjDescriptor;
 }
 
+// validation
+interface Validatable {
+  value: string | number;
+  required?: boolean;
+  minLength?: number;
+  maxLength?: number;
+  min?: number;
+  max?: number;
+}
+
+function validate(validatable: Validatable) {
+  let isValid = true; // 기본값은 true
+
+  if (validatable.required) {
+    isValid = isValid && validatable.value.toString().trim().length !== 0;
+  }
+  if (
+    validatable.minLength !== undefined &&
+    typeof validatable.value === "string"
+  ) {
+    isValid = isValid && validatable.value.length >= validatable.minLength;
+  }
+  // 등호가 하나일 경우 null 과 undefined 모두 포함
+  if (validatable.maxLength != null && typeof validatable.value === "string") {
+    isValid = isValid && validatable.value.length <= validatable.maxLength;
+  }
+  if (validatable.min != null && typeof validatable.value === "number") {
+    isValid = isValid && validatable.value > validatable.min;
+  }
+  if (validatable.max != null && typeof validatable.value === "number") {
+    isValid = isValid && validatable.value > validatable.max;
+  }
+
+  return isValid;
+}
+
 // class
 class ProjectInput {
   templateEl: HTMLTemplateElement;
@@ -59,13 +95,31 @@ class ProjectInput {
     const enteredDesc = this.descInputEl.value;
     const enteredPeople = this.peopleInputEl.value;
 
+    // 유효성 체크
+    const titleValidatable: Validatable = {
+      value: enteredTitle,
+      required: true,
+      minLength: 3,
+    };
+    const descValidatable: Validatable = {
+      value: enteredDesc,
+      required: true,
+      minLength: 20,
+    };
+    const popleValidatable: Validatable = {
+      value: enteredPeople,
+      required: true,
+      min: 0,
+      max: 10,
+    };
+
     // 입력 필드 빈값 체크
     if (
-      enteredTitle.trim().length === 0 ||
-      enteredDesc.trim().length === 0 ||
-      enteredPeople.trim().length === 0
+      !validate(titleValidatable) ||
+      !validate(descValidatable) ||
+      !validate(popleValidatable)
     ) {
-      alert("입력 필드에 값을 입력헤주세요!");
+      alert("입력 값을 확인 해주세요!");
       return; // return 값이 없는 경우 void
     }
 
