@@ -53,6 +53,43 @@ function validate(validatable: Validatable) {
 }
 
 // class
+abstract class Component<T extends HTMLElement, U extends HTMLElement> {
+  // 추상 클래스는 직접 인스턴스화가 이뤄지지 않음
+  templateEl: HTMLTemplateElement;
+  hostEl: T;
+  element: U;
+
+  constructor(
+    templateId: string,
+    hostElementId: string,
+    insertAtStart: boolean,
+    newElementId?: string
+  ) {
+    this.templateEl = document.getElementById(
+      templateId
+    )! as HTMLTemplateElement;
+    this.hostEl = document.getElementById(hostElementId)! as T;
+
+    const importedNode = document.importNode(this.templateEl.content, true);
+    this.element = importedNode.firstElementChild as U;
+    if (newElementId) {
+      this.element.id = newElementId;
+    }
+    this.attatch(insertAtStart);
+  }
+
+  private attatch(insertAtBeginnig: boolean) {
+    this.hostEl.insertAdjacentElement(
+      insertAtBeginnig ? "afterbegin" : "beforeend",
+      this.element
+    );
+  }
+
+  // 추상화 메서드는 실제로 구현되지는 않으나 해당 클래스를 상속 받는 모든 클래스에서 추가할 수 있음
+  abstract configure?(): void;
+  abstract renderContent(): void;
+}
+
 enum LIST_TYPE {
   active = "active",
   finished = "finished",
@@ -68,13 +105,22 @@ class Project {
   ) {}
 }
 
-type Listener = (items: Project[]) => void;
-class ProjectState {
-  private listeners: Listener[] = []; // 리스너 함수 배열
-  private projects: Project[] = [];
+type Listener<T> = (items: T[]) => void;
+
+class State<T> {
+  protected listeners: Listener<T>[] = []; // protected 비공개이면서 상속 가능함
+
+  addListener(listenerFn: Listener<T>) {
+    this.listeners.push(listenerFn);
+  }
+}
+class ProjectState extends State<Project> {
+  private projects: Project[] = []; //
   private static instance: ProjectState;
 
-  private constructor() {}
+  private constructor() {
+    super();
+  }
 
   static getInstance() {
     if (this.instance) {
@@ -82,10 +128,6 @@ class ProjectState {
     }
     this.instance = new ProjectState();
     return this.instance;
-  }
-
-  addListener(listenFn: Listener) {
-    this.listeners.push(listenFn);
   }
 
   addPorject(title: string, desc: string, pepole: number) {
@@ -105,37 +147,15 @@ class ProjectState {
 // 하나의 상태 관리 객체 -> 싱글톤 패턴
 const projectState = ProjectState.getInstance();
 
-class ProjectList {
-  templateEl: HTMLTemplateElement;
-  hostEl: HTMLDivElement;
-  element: HTMLElement;
+class ProjectList extends Component<HTMLDivElement, HTMLElement> {
   assignedProjects: Project[];
 
   constructor(private type: LIST_TYPE) {
-    this.templateEl = document.getElementById(
-      "project-list"
-    )! as HTMLTemplateElement;
-    this.hostEl = document.getElementById("app")! as HTMLDivElement;
+    super("project-list", "app", false, `${type}-projects`);
     this.assignedProjects = [];
 
-    // form element
-    const importedNode = document.importNode(this.templateEl.content, true);
-    this.element = importedNode.firstElementChild as HTMLElement;
-    this.element.id = `${this.type}-projects`;
-
-    projectState.addListener((projects: Project[]) => {
-      const relevantProjects = projects.filter((project) => {
-        if (this.type === LIST_TYPE.active) {
-          return project.status === LIST_TYPE.active;
-        }
-        return project.status === LIST_TYPE.finished;
-      });
-      this.assignedProjects = relevantProjects;
-      this.renderProjects();
-    });
-
+    this.configure();
     // rendering
-    this.attatch();
     this.renderContent(); // renderContent 먼저 호출 되고 -> renderProjects() 호출
   }
 
@@ -150,36 +170,34 @@ class ProjectList {
     }
   }
 
-  private renderContent() {
+  configure(): void {
+    projectState.addListener((projects: Project[]) => {
+      const relevantProjects = projects.filter((project) => {
+        if (this.type === LIST_TYPE.active) {
+          return project.status === LIST_TYPE.active;
+        }
+        return project.status === LIST_TYPE.finished;
+      });
+      this.assignedProjects = relevantProjects;
+      this.renderProjects();
+    });
+  }
+
+  renderContent() {
     const listId = `${this.type}-project-list`;
     this.element.querySelector("ul")!.id = listId;
     this.element.querySelector("h2")!.textContent =
       this.type.toUpperCase() + "PRJECTS";
   }
-
-  private attatch() {
-    this.hostEl.insertAdjacentElement("beforeend", this.element);
-  }
 }
-class ProjectInput {
-  templateEl: HTMLTemplateElement;
-  hostEl: HTMLDivElement;
-  element: HTMLFormElement;
+class ProjectInput extends Component<HTMLDivElement, HTMLFormElement> {
   // form
   titleInputEl: HTMLInputElement;
   descInputEl: HTMLInputElement;
   peopleInputEl: HTMLInputElement;
 
   constructor() {
-    this.templateEl = document.getElementById(
-      "project-input"
-    )! as HTMLTemplateElement;
-    this.hostEl = document.getElementById("app")! as HTMLDivElement;
-
-    // form element
-    const importedNode = document.importNode(this.templateEl.content, true);
-    this.element = importedNode.firstElementChild as HTMLFormElement;
-    this.element.id = "user-input";
+    super("project-input", "app", true, "user-input");
 
     this.titleInputEl = this.element.querySelector(
       "#title"
@@ -193,10 +211,14 @@ class ProjectInput {
 
     // event
     this.configure();
-
-    // rendering
-    this.attatch();
+    this.renderContent();
   }
+
+  configure() {
+    this.element.addEventListener("submit", this.submitHandler);
+  }
+
+  renderContent() {}
 
   private gatherUserInput(): [string, string, number] | void {
     const enteredTitle = this.titleInputEl.value;
@@ -251,14 +273,6 @@ class ProjectInput {
       projectState.addPorject(title, desc, people);
       this.clearInputs();
     }
-  }
-
-  private configure() {
-    this.element.addEventListener("submit", this.submitHandler);
-  }
-
-  private attatch() {
-    this.hostEl.insertAdjacentElement("afterbegin", this.element);
   }
 }
 
