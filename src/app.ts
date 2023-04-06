@@ -58,25 +58,96 @@ enum LIST_TYPE {
   finished = "finished",
 }
 
+class Project {
+  constructor(
+    public id: string,
+    public title: string,
+    public desc: string,
+    public people: number,
+    public status: LIST_TYPE
+  ) {}
+}
+
+type Listener = (items: Project[]) => void;
+class ProjectState {
+  private listeners: Listener[] = []; // 리스너 함수 배열
+  private projects: Project[] = [];
+  private static instance: ProjectState;
+
+  private constructor() {}
+
+  static getInstance() {
+    if (this.instance) {
+      return this.instance;
+    }
+    this.instance = new ProjectState();
+    return this.instance;
+  }
+
+  addListener(listenFn: Listener) {
+    this.listeners.push(listenFn);
+  }
+
+  addPorject(title: string, desc: string, pepole: number) {
+    const newProject: Project = new Project(
+      Math.random().toString(),
+      title,
+      desc,
+      pepole,
+      LIST_TYPE.active
+    );
+    this.projects.push(newProject);
+    for (const listenerFn of this.listeners) {
+      listenerFn(this.projects.slice());
+    }
+  }
+}
+// 하나의 상태 관리 객체 -> 싱글톤 패턴
+const projectState = ProjectState.getInstance();
+
 class ProjectList {
   templateEl: HTMLTemplateElement;
   hostEl: HTMLDivElement;
   element: HTMLElement;
+  assignedProjects: Project[];
 
   constructor(private type: LIST_TYPE) {
     this.templateEl = document.getElementById(
       "project-list"
     )! as HTMLTemplateElement;
     this.hostEl = document.getElementById("app")! as HTMLDivElement;
+    this.assignedProjects = [];
 
     // form element
     const importedNode = document.importNode(this.templateEl.content, true);
     this.element = importedNode.firstElementChild as HTMLElement;
     this.element.id = `${this.type}-projects`;
 
+    projectState.addListener((projects: Project[]) => {
+      const relevantProjects = projects.filter((project) => {
+        if (this.type === LIST_TYPE.active) {
+          return project.status === LIST_TYPE.active;
+        }
+        return project.status === LIST_TYPE.finished;
+      });
+      this.assignedProjects = relevantProjects;
+      this.renderProjects();
+    });
+
     // rendering
     this.attatch();
-    this.renderContent();
+    this.renderContent(); // renderContent 먼저 호출 되고 -> renderProjects() 호출
+  }
+
+  private renderProjects() {
+    const listEl = document.getElementById(
+      `${this.type}-project-list`
+    )! as HTMLUListElement;
+    for (const projectItem of this.assignedProjects) {
+      const listItem = document.createElement("li") as HTMLLIElement;
+      listItem.textContent = projectItem.title;
+      listEl.appendChild(listItem);
+    }
   }
 
   private renderContent() {
@@ -177,6 +248,7 @@ class ProjectInput {
       // 튜블은 배열
       const [title, desc, people] = userInput;
       console.log(title, desc, people);
+      projectState.addPorject(title, desc, people);
       this.clearInputs();
     }
   }
