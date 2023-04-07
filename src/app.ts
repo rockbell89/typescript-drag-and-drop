@@ -5,7 +5,6 @@ function AutoBind(
   descriptor: PropertyDescriptor
 ): any {
   const originalMethod = descriptor.value;
-  console.log("originalMethod", originalMethod);
   const adjDescriptor: PropertyDescriptor = {
     configurable: true,
     get() {
@@ -90,9 +89,22 @@ abstract class Component<T extends HTMLElement, U extends HTMLElement> {
   abstract renderContent(): void;
 }
 
-enum LIST_TYPE {
+enum ProjectStatus {
   active = "active",
   finished = "finished",
+}
+
+// 드래그 이벤트
+interface Draggable {
+  dragStartHandler(event: DragEvent): void;
+  dragEndHandler(event: DragEvent): void;
+}
+
+// 드래그 대상 이벤트
+interface DragTarget {
+  dragOverHandler(event: DragEvent): void;
+  dropHandler(event: DragEvent): void;
+  dragLeaeHandler(event: DragEvent): void;
 }
 
 class Project {
@@ -101,7 +113,7 @@ class Project {
     public title: string,
     public desc: string,
     public people: number,
-    public status: LIST_TYPE
+    public status: ProjectStatus
   ) {}
 }
 
@@ -136,9 +148,21 @@ class ProjectState extends State<Project> {
       title,
       desc,
       pepole,
-      LIST_TYPE.active
+      ProjectStatus.active
     );
     this.projects.push(newProject);
+    this.updateListeners();
+  }
+
+  moveProject(projectId: string, newStatus: ProjectStatus) {
+    const target = this.projects.find((project) => project.id === projectId);
+    if (target && target.status !== newStatus) {
+      target.status = newStatus;
+      this.updateListeners();
+    }
+  }
+
+  private updateListeners() {
     for (const listenerFn of this.listeners) {
       listenerFn(this.projects.slice());
     }
@@ -147,7 +171,10 @@ class ProjectState extends State<Project> {
 // 하나의 상태 관리 객체 -> 싱글톤 패턴
 const projectState = ProjectState.getInstance();
 
-class ProjectItem extends Component<HTMLUListElement, HTMLLIElement> {
+class ProjectItem
+  extends Component<HTMLUListElement, HTMLLIElement>
+  implements Draggable
+{
   private project: Project;
   constructor(hostId: string, project: Project) {
     super("single-project", hostId, false, project.id);
@@ -156,7 +183,21 @@ class ProjectItem extends Component<HTMLUListElement, HTMLLIElement> {
     this.renderContent();
   }
 
-  configure(): void {}
+  @AutoBind
+  dragStartHandler(event: DragEvent) {
+    event.dataTransfer!.setData("text/plain", this.project.id);
+    event.dataTransfer!.effectAllowed = "move"; // 마우스 커서 모양
+    this.element.style.opacity = "1";
+  }
+
+  dragEndHandler(_: DragEvent) {
+    console.log("Drag End!");
+  }
+
+  configure(): void {
+    this.element.addEventListener("dragstart", this.dragStartHandler);
+    this.element.addEventListener("dragend", this.dragEndHandler);
+  }
 
   renderContent(): void {
     this.element.querySelector("h2")!.textContent = this.project.title;
@@ -166,10 +207,13 @@ class ProjectItem extends Component<HTMLUListElement, HTMLLIElement> {
   }
 }
 
-class ProjectList extends Component<HTMLDivElement, HTMLElement> {
+class ProjectList
+  extends Component<HTMLDivElement, HTMLElement>
+  implements DragTarget
+{
   assignedProjects: Project[];
 
-  constructor(private type: LIST_TYPE) {
+  constructor(private type: ProjectStatus) {
     super("project-list", "app", false, `${type}-projects`);
     this.assignedProjects = [];
 
@@ -178,13 +222,43 @@ class ProjectList extends Component<HTMLDivElement, HTMLElement> {
     this.renderContent(); // renderContent 먼저 호출 되고 -> renderProjects() 호출
   }
 
+  @AutoBind
+  dragOverHandler(event: DragEvent): void {
+    if (event.dataTransfer && event.dataTransfer.types[0] === "text/plain") {
+      event.preventDefault(); // 자바스크립트에서 실제도 작동되게 하기 위해
+      const listEl = this.element.querySelector("ul")!;
+      listEl.classList.add("droppable");
+    }
+  }
+
+  @AutoBind
+  dropHandler(event: DragEvent): void {
+    const projectId = event.dataTransfer!.getData("text/plain");
+    projectState.moveProject(
+      projectId,
+      this.type === ProjectStatus.active
+        ? ProjectStatus.active
+        : ProjectStatus.finished
+    );
+  }
+
+  @AutoBind
+  dragLeaeHandler(_: DragEvent): void {
+    const listEl = this.element.querySelector("ul")!;
+    listEl.classList.remove("droppable");
+  }
+
   configure(): void {
+    this.element.addEventListener("dragover", this.dragOverHandler);
+    this.element.addEventListener("drop", this.dropHandler);
+    this.element.addEventListener("dragleave", this.dragLeaeHandler);
+
     projectState.addListener((projects: Project[]) => {
       const relevantProjects = projects.filter((project) => {
-        if (this.type === LIST_TYPE.active) {
-          return project.status === LIST_TYPE.active;
+        if (this.type === ProjectStatus.active) {
+          return project.status === ProjectStatus.active;
         }
-        return project.status === LIST_TYPE.finished;
+        return project.status === ProjectStatus.finished;
       });
       this.assignedProjects = relevantProjects;
       this.renderProjects();
@@ -295,5 +369,5 @@ class ProjectInput extends Component<HTMLDivElement, HTMLFormElement> {
 }
 
 const project = new ProjectInput();
-const activeProject = new ProjectList(LIST_TYPE.active);
-const finishedProject = new ProjectList(LIST_TYPE.finished);
+const activeProject = new ProjectList(ProjectStatus.active);
+const finishedProject = new ProjectList(ProjectStatus.finished);
